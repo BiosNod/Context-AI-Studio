@@ -6,8 +6,7 @@
     <title>NWJS Ollama IDE</title>
     <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
     <link href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.7.2/font/bootstrap-icons.css" rel="stylesheet">
-    <link rel="stylesheet"
-          href="https://cdnjs.cloudflare.com/ajax/libs/jstree/3.3.12/themes/default-dark/style.min.css">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/jstree/3.3.12/themes/default-dark/style.min.css">
     <style>
         body {
             display: flex;
@@ -17,38 +16,32 @@
             background-color: #1a1a1a;
             color: #ffffff;
         }
-
         #left-panel {
-            width: 300px;
+            width: 320px;
             display: flex;
             flex-direction: column;
             border-right: 1px solid #444;
             background-color: #2a2a2a;
             padding: 10px;
         }
-
         #file-tree {
             flex-grow: 1;
             overflow-y: auto;
             padding: 10px;
         }
-
         #context-info {
             padding: 10px;
             border-top: 1px solid #444;
         }
-
         #editor-panel {
             flex-grow: 1;
             display: flex;
             flex-direction: column;
         }
-
         #editor {
             flex-grow: 1;
             width: 100%;
         }
-
         #language-select {
             padding: 10px;
             background-color: #2a2a2a;
@@ -56,36 +49,58 @@
             justify-content: flex-start;
             align-items: center;
         }
-
         #lang-select, #zoom-select {
             width: auto;
             margin-right: 10px;
         }
-
         .jstree-default-dark .jstree-clicked {
             background-color: #4a4a4a !important;
         }
-
-        /* Стилизация скроллбара */
         ::-webkit-scrollbar {
             width: 10px;
         }
-
         ::-webkit-scrollbar-track {
             background: #2a2a2a;
         }
-
         ::-webkit-scrollbar-thumb {
             background: #888;
             border-radius: 5px;
         }
-
         ::-webkit-scrollbar-thumb:hover {
             background: #555;
         }
-
         .btn {
             margin-bottom: 10px;
+        }
+        #templates {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+        }
+        #template-select {
+            flex-grow: 1;
+            margin-right: 5px;
+        }
+        .template-btn {
+            padding: 5px;
+            font-size: 1.2em;
+            width: 32px;
+            height: 32px;
+            margin-left: 5px;
+        }
+        #resizer {
+            width: 5px;
+            background-color: #444;
+            cursor: col-resize;
+            user-select: none;
+        }
+        body.resizing {
+            cursor: col-resize;
+            user-select: none;
+        }
+        body.resizing #left-panel,
+        body.resizing #editor-panel {
+            pointer-events: none;
         }
     </style>
 </head>
@@ -101,11 +116,12 @@
         <select id="template-select" class="form-select bg-dark text-light">
             <option value="">Выберите шаблон</option>
         </select>
-        <button id="save-template" class="btn btn-success btn-sm mt-2 w-100">Сохранить шаблон</button>
-        <button id="edit-template" class="btn btn-warning btn-sm mt-2 w-100">Редактировать шаблон</button>
-        <button id="delete-template" class="btn btn-danger btn-sm mt-2 w-100">Удалить шаблон</button>
+        <button id="save-template" class="btn btn-success btn-sm template-btn" title="Сохранить шаблон"><i class="bi bi-save"></i></button>
+        <button id="edit-template" class="btn btn-warning btn-sm template-btn" title="Редактировать шаблон"><i class="bi bi-pencil"></i></button>
+        <button id="delete-template" class="btn btn-danger btn-sm template-btn" title="Удалить шаблон"><i class="bi bi-trash"></i></button>
     </div>
 </div>
+<div id="resizer"></div>
 <div id="editor-panel">
     <div id="editor"></div>
     <div id="language-select">
@@ -341,7 +357,8 @@
     });
 
     function saveTemplate() {
-        const name = prompt('Введите имя шаблона:');
+        const currentTemplate = $('#template-select').val();
+        const name = prompt('Введите имя шаблона:', currentTemplate || '');
         if (!name) return;
 
         const selectedNodes = $('#file-tree').jstree('get_checked', true);
@@ -355,6 +372,7 @@
         localStorage.setItem('templates', JSON.stringify(templates));
         updateTemplateSelect();
         saveTemplateToFile(template);
+        $('#template-select').val(name);  // Выбираем сохраненный шаблон
     }
 
     function loadTemplate() {
@@ -372,16 +390,16 @@
     }
 
     function editTemplate() {
-        const templateName = $('#template-select').val();
-        if (!templateName) {
+        const currentTemplate = $('#template-select').val();
+        if (!currentTemplate) {
             alert('Пожалуйста, выберите шаблон для редактирования');
             return;
         }
-        const newName = prompt('Введите новое имя шаблона:', templateName);
-        if (!newName || newName === templateName) return;
+        const newName = prompt('Введите новое имя шаблона:', currentTemplate);
+        if (!newName || newName === currentTemplate) return;
 
         let templates = JSON.parse(localStorage.getItem('templates') || '[]');
-        const templateIndex = templates.findIndex(t => t.name === templateName);
+        const templateIndex = templates.findIndex(t => t.name === currentTemplate);
         if (templateIndex !== -1) {
             templates[templateIndex].name = newName;
             localStorage.setItem('templates', JSON.stringify(templates));
@@ -392,12 +410,13 @@
             const filePath = path.join(projectPath, 'ai.context.json');
             if (fs.existsSync(filePath)) {
                 let fileTemplates = JSON.parse(fs.readFileSync(filePath, 'utf8'));
-                if (fileTemplates[templateName]) {
-                    fileTemplates[newName] = fileTemplates[templateName];
-                    delete fileTemplates[templateName];
+                if (fileTemplates[currentTemplate]) {
+                    fileTemplates[newName] = fileTemplates[currentTemplate];
+                    delete fileTemplates[currentTemplate];
                     fs.writeFileSync(filePath, JSON.stringify(fileTemplates, null, 2));
                 }
             }
+            $('#template-select').val(newName);  // Выбираем отредактированный шаблон
         }
     }
 
@@ -580,9 +599,45 @@
         });
     }
 
+    // Функция для изменения размера панелей
+    function initializeResizer() {
+        const leftPanel = document.getElementById('left-panel');
+        const resizer = document.getElementById('resizer');
+        const editorPanel = document.getElementById('editor-panel');
+        const body = document.body;
+
+        let startX, startWidth;
+
+        function startResize(e) {
+            startX = e.clientX;
+            startWidth = parseInt(getComputedStyle(leftPanel).width, 10);
+            body.classList.add('resizing');
+            document.addEventListener('mousemove', resize);
+            document.addEventListener('mouseup', stopResize);
+            e.preventDefault(); // Предотвращаем выделение текста
+        }
+
+        function resize(e) {
+            const diff = e.clientX - startX;
+            const newWidth = startWidth + diff;
+            leftPanel.style.width = `${newWidth}px`;
+            editorPanel.style.width = `calc(100% - ${newWidth}px)`;
+        }
+
+        function stopResize() {
+            body.classList.remove('resizing');
+            document.removeEventListener('mousemove', resize);
+            document.removeEventListener('mouseup', stopResize);
+            editor.resize(); // Обновляем размер редактора Ace
+        }
+
+        resizer.addEventListener('mousedown', startResize);
+    }
+
     // Инициализация
     updateTemplateSelect();
     watchProjectChanges();
+    initializeResizer();
 </script>
 </body>
 </html>
