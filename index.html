@@ -6,7 +6,8 @@
     <title>NWJS Ollama IDE</title>
     <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
     <link href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.7.2/font/bootstrap-icons.css" rel="stylesheet">
-    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/jstree/3.3.12/themes/default-dark/style.min.css">
+    <link rel="stylesheet"
+          href="https://cdnjs.cloudflare.com/ajax/libs/jstree/3.3.12/themes/default-dark/style.min.css">
     <style>
         body {
             display: flex;
@@ -16,31 +17,38 @@
             background-color: #1a1a1a;
             color: #ffffff;
         }
+
         #left-panel {
             width: 300px;
             display: flex;
             flex-direction: column;
             border-right: 1px solid #444;
             background-color: #2a2a2a;
+            padding: 10px;
         }
+
         #file-tree {
             flex-grow: 1;
             overflow-y: auto;
             padding: 10px;
         }
+
         #context-info {
             padding: 10px;
             border-top: 1px solid #444;
         }
+
         #editor-panel {
             flex-grow: 1;
             display: flex;
             flex-direction: column;
         }
+
         #editor {
             flex-grow: 1;
             width: 100%;
         }
+
         #language-select {
             padding: 10px;
             background-color: #2a2a2a;
@@ -48,44 +56,54 @@
             justify-content: flex-start;
             align-items: center;
         }
+
         #lang-select, #zoom-select {
             width: auto;
             margin-right: 10px;
         }
+
         .jstree-default-dark .jstree-clicked {
             background-color: #4a4a4a !important;
         }
+
         /* Стилизация скроллбара */
         ::-webkit-scrollbar {
             width: 10px;
         }
+
         ::-webkit-scrollbar-track {
             background: #2a2a2a;
         }
+
         ::-webkit-scrollbar-thumb {
             background: #888;
             border-radius: 5px;
         }
+
         ::-webkit-scrollbar-thumb:hover {
             background: #555;
+        }
+
+        .btn {
+            margin-bottom: 10px;
         }
     </style>
 </head>
 <body class="bg-dark text-light">
 <div id="left-panel">
-    <button id="select-project" class="btn btn-primary w-100 mb-2">Выбрать директорию проекта</button>
+    <button id="select-project" class="btn btn-primary w-100">Выбрать директорию проекта</button>
     <div id="file-tree"></div>
     <div id="context-info" class="mt-2">
         <div>Токенов в контексте: <span id="token-count">0</span></div>
-        <button id="copy-context" class="btn btn-info btn-sm mt-2">Копировать контекст</button>
+        <button id="copy-context" class="btn btn-info btn-sm mt-2 w-100">Копировать контекст</button>
     </div>
     <div id="templates" class="mt-2">
         <select id="template-select" class="form-select bg-dark text-light">
             <option value="">Выберите шаблон</option>
         </select>
-        <input type="text" id="template-name" class="form-control bg-dark text-light mt-2" placeholder="Имя шаблона">
-        <button id="save-template" class="btn btn-success btn-sm mt-2">Сохранить шаблон</button>
-        <button id="delete-template" class="btn btn-danger btn-sm mt-2">Удалить шаблон</button>
+        <button id="save-template" class="btn btn-success btn-sm mt-2 w-100">Сохранить шаблон</button>
+        <button id="edit-template" class="btn btn-warning btn-sm mt-2 w-100">Редактировать шаблон</button>
+        <button id="delete-template" class="btn btn-danger btn-sm mt-2 w-100">Удалить шаблон</button>
     </div>
 </div>
 <div id="editor-panel">
@@ -115,18 +133,15 @@
     let editor = ace.edit("editor");
     editor.setTheme("ace/theme/monokai");
     editor.session.setMode("ace/mode/javascript");
-    editor.setFontSize(16); // Устанавливаем начальный размер шрифта
+    editor.setFontSize(16);
 
-    // Устанавливаем масштаб редактора по умолчанию
     editor.setOption("fontSize", 16);
 
-    // Обработчик изменения масштаба
-    $('#zoom-select').on('change', function() {
+    $('#zoom-select').on('change', function () {
         const zoom = parseFloat($(this).val());
         editor.setOption("fontSize", 16 * zoom);
     });
 
-    // Обновленная функция для выбора директории проекта
     $('#select-project').on('click', () => {
         const chooser = document.createElement('input');
         chooser.type = 'file';
@@ -140,7 +155,6 @@
         chooser.click();
     });
 
-    // Обновленная функция getDirectoryStructure
     function getDirectoryStructure(dir) {
         const fs = nw.require('fs');
         const path = nw.require('path');
@@ -186,7 +200,6 @@
         return readDir(dir);
     }
 
-    // Обновленная функция updateFileTree
     function updateFileTree() {
         if (!projectPath) return;
 
@@ -224,9 +237,13 @@
             }
             updateTokenCount();
         });
+
+        // Добавляем обработчик события изменения состояния чекбокса
+        $('#file-tree').on('check_node.jstree uncheck_node.jstree', (e, data) => {
+            updateTokenCount();
+        });
     }
 
-    // Функция открытия файла в редакторе
     function openFile(filePath) {
         const fs = require('fs');
         const path = require('path');
@@ -247,7 +264,6 @@
         });
     }
 
-    // Функция определения режима Ace на основе расширения файла
     function getAceMode(extension) {
         const modeMap = {
             'js': 'javascript',
@@ -271,7 +287,6 @@
         return modeMap[extension] || 'text';
     }
 
-    // Заполнение выпадающего списка языков
     const languages = ['javascript', 'python', 'html', 'css', 'java', 'c_cpp', 'ruby', 'php', 'json', 'xml', 'markdown', 'sql', 'sh', 'yaml', 'text'];
     languages.forEach(lang => {
         $('#lang-select').append($('<option>', {
@@ -280,13 +295,11 @@
         }));
     });
 
-    // Обработчик изменения языка
-    $('#lang-select').on('change', function() {
+    $('#lang-select').on('change', function () {
         const selectedMode = $(this).val();
         editor.session.setMode(`ace/mode/${selectedMode}`);
     });
 
-    // Функция подсчета токенов
     function updateTokenCount() {
         const fs = require('fs');
         const selectedNodes = $('#file-tree').jstree('get_checked', true);
@@ -295,14 +308,13 @@
         selectedNodes.forEach(node => {
             if (node.type === 'file') {
                 const content = fs.readFileSync(node.original.path, 'utf8');
-                tokenCount += content.split(/\s+/).length; // Простой подсчет слов
+                tokenCount += content.split(/\s+/).length;
                 totalSize += getFileSize(node.original.path);
             }
         });
         $('#token-count').text(`${tokenCount} (${formatFileSize(totalSize)})`);
     }
 
-    // Функция для форматирования размера файла
     function formatFileSize(bytes) {
         if (bytes < 1024) return bytes + ' B';
         else if (bytes < 1048576) return (bytes / 1024).toFixed(2) + ' KB';
@@ -310,13 +322,11 @@
         else return (bytes / 1073741824).toFixed(2) + ' GB';
     }
 
-    // Функция для определения размера файла
     function getFileSize(filePath) {
         const stats = fs.statSync(filePath);
         return stats.size;
     }
 
-    // Копирование контекста
     $('#copy-context').on('click', () => {
         const selectedNodes = $('#file-tree').jstree('get_checked', true);
         let context = '';
@@ -330,20 +340,17 @@
         alert('Контекст скопирован в буфер обмена');
     });
 
-    // Функции для работы с шаблонами
     function saveTemplate() {
-        const name = $('#template-name').val();
-        if (!name) {
-            alert('Пожалуйста, введите имя шаблона');
-            return;
-        }
+        const name = prompt('Введите имя шаблона:');
+        if (!name) return;
+
         const selectedNodes = $('#file-tree').jstree('get_checked', true);
         const template = {
             name: name,
             selection: selectedNodes.map(node => node.id)
         };
         let templates = JSON.parse(localStorage.getItem('templates') || '[]');
-        templates = templates.filter(t => t.name !== name); // Удаляем существующий шаблон с таким же именем
+        templates = templates.filter(t => t.name !== name);
         templates.push(template);
         localStorage.setItem('templates', JSON.stringify(templates));
         updateTemplateSelect();
@@ -364,9 +371,41 @@
         }
     }
 
+    function editTemplate() {
+        const templateName = $('#template-select').val();
+        if (!templateName) {
+            alert('Пожалуйста, выберите шаблон для редактирования');
+            return;
+        }
+        const newName = prompt('Введите новое имя шаблона:', templateName);
+        if (!newName || newName === templateName) return;
+
+        let templates = JSON.parse(localStorage.getItem('templates') || '[]');
+        const templateIndex = templates.findIndex(t => t.name === templateName);
+        if (templateIndex !== -1) {
+            templates[templateIndex].name = newName;
+            localStorage.setItem('templates', JSON.stringify(templates));
+            updateTemplateSelect();
+            // Обновляем файл с шаблонами
+            const fs = require('fs');
+            const path = require('path');
+            const filePath = path.join(projectPath, 'ai.context.json');
+            if (fs.existsSync(filePath)) {
+                let fileTemplates = JSON.parse(fs.readFileSync(filePath, 'utf8'));
+                if (fileTemplates[templateName]) {
+                    fileTemplates[newName] = fileTemplates[templateName];
+                    delete fileTemplates[templateName];
+                    fs.writeFileSync(filePath, JSON.stringify(fileTemplates, null, 2));
+                }
+            }
+        }
+    }
+
     function deleteTemplate() {
         const templateName = $('#template-select').val();
         if (!templateName) return;
+        if (!confirm(`Вы уверены, что хотите удалить шаблон "${templateName}"?`)) return;
+
         let templates = JSON.parse(localStorage.getItem('templates') || '[]');
         templates = templates.filter(t => t.name !== templateName);
         localStorage.setItem('templates', JSON.stringify(templates));
@@ -378,9 +417,9 @@
         const templates = JSON.parse(localStorage.getItem('templates') || '[]');
         const $select = $('#template-select');
         $select.empty();
-        $select.append($('<option>', { value: '', text: 'Выберите шаблон' }));
+        $select.append($('<option>', {value: '', text: 'Выберите шаблон'}));
         templates.forEach(template => {
-            $select.append($('<option>', { value: template.name, text: template.name }));
+            $select.append($('<option>', {value: template.name, text: template.name}));
         });
     }
 
@@ -409,12 +448,12 @@
 
     $('#save-template').on('click', saveTemplate);
     $('#template-select').on('change', loadTemplate);
+    $('#edit-template').on('click', editTemplate);
     $('#delete-template').on('click', deleteTemplate);
 
     // Инициализация
     updateTemplateSelect();
 
-    // Обработчик изменения файловой структуры
     function handleFileStructureChange() {
         const templates = JSON.parse(localStorage.getItem('templates') || '[]');
         templates.forEach(template => {
@@ -426,7 +465,6 @@
         updateTemplateSelect();
     }
 
-    // Обновление файловой структуры при изменении проекта
     function watchProjectChanges() {
         if (!projectPath) return;
 
@@ -437,25 +475,34 @@
         });
 
         watcher
-            .on('add', path => { updateFileTree(); handleFileStructureChange(); })
-            .on('unlink', path => { updateFileTree(); handleFileStructureChange(); })
-            .on('addDir', path => { updateFileTree(); handleFileStructureChange(); })
-            .on('unlinkDir', path => { updateFileTree(); handleFileStructureChange(); });
+            .on('add', path => {
+                updateFileTree();
+                handleFileStructureChange();
+            })
+            .on('unlink', path => {
+                updateFileTree();
+                handleFileStructureChange();
+            })
+            .on('addDir', path => {
+                updateFileTree();
+                handleFileStructureChange();
+            })
+            .on('unlinkDir', path => {
+                updateFileTree();
+                handleFileStructureChange();
+            });
     }
 
-    // Инициализация наблюдения за изменениями проекта
     $('#select-project').on('click', () => {
         watchProjectChanges();
     });
 
-    // Функция для обновления содержимого файла при его изменении
     function updateFileContent(filePath) {
         if (editor.getValue() !== fs.readFileSync(filePath, 'utf8')) {
             openFile(filePath);
         }
     }
 
-    // Наблюдение за изменениями открытого файла
     let currentOpenedFile = '';
     $('#file-tree').on('changed.jstree', (e, data) => {
         if (data.node && data.node.type === 'file') {
@@ -468,11 +515,10 @@
         }
     });
 
-    // Сохранение изменений в файле
     editor.commands.addCommand({
         name: 'saveFile',
-        bindKey: {win: 'Ctrl-S',  mac: 'Command-S'},
-        exec: function(editor) {
+        bindKey: {win: 'Ctrl-S', mac: 'Command-S'},
+        exec: function (editor) {
             if (currentOpenedFile) {
                 fs.writeFileSync(currentOpenedFile, editor.getValue(), 'utf8');
                 console.log('File saved:', currentOpenedFile);
@@ -481,31 +527,11 @@
         readOnly: false
     });
 
-    // Обновленная функция подсчета токенов
-    function updateTokenCount() {
-        const fs = require('fs');
-        const selectedNodes = $('#file-tree').jstree('get_checked', true);
-        let tokenCount = 0;
-        let totalSize = 0;
-
-        selectedNodes.forEach(node => {
-            if (node.type === 'file') {
-                const content = fs.readFileSync(node.original.path, 'utf8');
-                tokenCount += content.split(/\s+/).length; // Простой подсчет слов
-                totalSize += getFileSize(node.original.path);
-            }
-        });
-
-        $('#token-count').text(`${tokenCount} (${formatFileSize(totalSize)})`);
-    }
-
-    // Обновление UI для отображения прогресса загрузки файла
     function updateLoadingProgress(progress) {
-        // Здесь можно добавить код для отображения прогресса загрузки
         console.log(`Loading progress: ${progress}%`);
+        // Здесь можно добавить код для отображения прогресса загрузки в UI
     }
 
-    // Асинхронное чтение файла с отображением прогресса
     function readFileAsync(filePath, callback) {
         const chunkSize = 1024 * 1024; // 1 MB chunks
         const fileSize = fs.statSync(filePath).size;
@@ -537,7 +563,6 @@
         readChunk();
     }
 
-    // Обновленная функция открытия файла с асинхронным чтением
     function openFile(filePath) {
         readFileAsync(filePath, (err, content) => {
             if (err) {
