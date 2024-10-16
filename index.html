@@ -238,7 +238,7 @@
                 },
                 check_callback: true
             },
-            plugins: ['checkbox', 'types'],
+            plugins: ['checkbox', 'types', 'path'],
             types: {
                 file: {
                     icon: 'bi bi-file-earmark'
@@ -266,6 +266,21 @@
             updateTokenCount();
         });
     }
+
+    // Добавим плагин path для jstree
+    $.jstree.plugins.path = function () {
+        this.get_node_by_path = function (path) {
+            let node = null;
+            this.get_json('#', { flat: true }).some(n => {
+                if (n.original && n.original.path === path) {
+                    node = n;
+                    return true;
+                }
+                return false;
+            });
+            return node;
+        };
+    };
 
     function openFile(filePath) {
         const fs = require('fs');
@@ -371,7 +386,7 @@
         const selectedNodes = $('#file-tree').jstree('get_checked', true);
         const template = {
             name: name,
-            selection: selectedNodes.map(node => node.id)
+            selection: selectedNodes.map(node => node.original.path) // Сохраняем пути вместо идентификаторов
         };
         let templates = JSON.parse(localStorage.getItem('templates') || '[]');
         templates = templates.filter(t => t.name !== name);
@@ -379,7 +394,7 @@
         localStorage.setItem('templates', JSON.stringify(templates));
         updateTemplateSelect();
         saveTemplateToFile(template);
-        $('#template-select').val(name);  // Выбираем сохраненный шаблон
+        $('#template-select').val(name);
     }
 
     function loadTemplate() {
@@ -389,8 +404,11 @@
         const template = templates.find(t => t.name === templateName);
         if (template) {
             $('#file-tree').jstree('uncheck_all');
-            template.selection.forEach(nodeId => {
-                $('#file-tree').jstree('check_node', nodeId);
+            template.selection.forEach(path => {
+                const node = $('#file-tree').jstree(true).get_node_by_path(path);
+                if (node) {
+                    $('#file-tree').jstree('check_node', node);
+                }
             });
             updateTokenCount();
         }
@@ -483,8 +501,8 @@
     function handleFileStructureChange() {
         const templates = JSON.parse(localStorage.getItem('templates') || '[]');
         templates.forEach(template => {
-            template.selection = template.selection.filter(nodeId => {
-                return $('#file-tree').jstree(true).get_node(nodeId);
+            template.selection = template.selection.filter(path => {
+                return $('#file-tree').jstree(true).get_node_by_path(path);
             });
         });
         localStorage.setItem('templates', JSON.stringify(templates));
