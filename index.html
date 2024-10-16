@@ -157,26 +157,9 @@
     editor.setTheme("ace/theme/monokai");
     editor.session.setMode("ace/mode/javascript");
     editor.setFontSize(16);
-
     editor.setOption("fontSize", 16);
 
-    $('#zoom-select').on('change', function () {
-        const zoom = parseFloat($(this).val());
-        editor.setOption("fontSize", 16 * zoom);
-    });
-
-    $('#select-project').on('click', () => {
-        const chooser = document.createElement('input');
-        chooser.type = 'file';
-        chooser.nwdirectory = true;
-
-        chooser.addEventListener('change', (event) => {
-            projectPath = chooser.value;
-            updateFileTree();
-        });
-
-        chooser.click();
-    });
+    let templates = {};
 
     function getDirectoryStructure(dir) {
         const fs = nw.require('fs');
@@ -238,7 +221,7 @@
                 },
                 check_callback: true
             },
-            plugins: ['checkbox', 'types', 'path'],
+            plugins: ['checkbox', 'types'],
             types: {
                 file: {
                     icon: 'bi bi-file-earmark'
@@ -261,18 +244,37 @@
             updateTokenCount();
         });
 
-        // Добавляем обработчик события изменения состояния чекбокса
         $('#file-tree').on('check_node.jstree uncheck_node.jstree', (e, data) => {
             updateTokenCount();
         });
+
+        // Загружаем шаблоны и первый шаблон после полной инициализации дерева
+        $('#file-tree').on('ready.jstree', function() {
+            console.log('Tree is ready'); // Логирование для отладки
+            loadTemplatesFromFile();
+            loadFirstTemplate();
+        });
+    }
+
+    // Новая функция для загрузки первого доступного шаблона
+    function loadFirstTemplate() {
+        const templateNames = Object.keys(templates);
+        if (templateNames.length > 0) {
+            const firstTemplateName = templateNames[0];
+            $('#template-select').val(firstTemplateName);
+            console.log('Loading first template:', firstTemplateName); // Логирование для отладки
+            loadTemplate(firstTemplateName);
+        } else {
+            console.log('No templates available'); // Логирование для отладки
+        }
     }
 
     // Добавим плагин path для jstree
     $.jstree.plugins.path = function () {
-        this.get_node_by_path = function (path) {
+        this.get_node_by_path = function (fullPath) {
             let node = null;
             this.get_json('#', { flat: true }).some(n => {
-                if (n.original && n.original.path === path) {
+                if (n.original && n.original.path === fullPath) {
                     node = n;
                     return true;
                 }
@@ -281,6 +283,39 @@
             return node;
         };
     };
+
+    function loadTemplatesFromFile() {
+        const fs = require('fs');
+        const path = require('path');
+        const filePath = path.join(projectPath, 'ai.context.json');
+        if (fs.existsSync(filePath)) {
+            templates = JSON.parse(fs.readFileSync(filePath, 'utf8'));
+            updateTemplateSelect();
+        }
+    }
+
+    // Обновленная функция loadTemplate, которая теперь может принимать имя шаблона
+    function loadTemplate(templateName) {
+        templateName = templateName || $('#template-select').val();
+        if (!templateName) return;
+        const template = templates[templateName];
+        if (template) {
+            $('#file-tree').jstree('uncheck_all');
+
+            let treeInstance = $('#file-tree').jstree(true);
+            // Пример итерации по узлам и получения полного пути для каждого файла
+            treeInstance.get_json('#', { flat: true }).forEach(function (node) {
+                // Получаем узел через get_node для доступа к original
+                let fullNode = treeInstance.get_node(node.id);
+                let relativePath = getRelativePath(fullNode.original.path)
+                console.log(relativePath); // Полный путь к файлу
+                if (template.includes(relativePath))
+                    $('#file-tree').jstree('check_node', node);
+            });
+
+            updateTokenCount();
+        }
+    }
 
     function openFile(filePath) {
         const fs = require('fs');
@@ -333,11 +368,6 @@
         }));
     });
 
-    $('#lang-select').on('change', function () {
-        const selectedMode = $(this).val();
-        editor.session.setMode(`ace/mode/${selectedMode}`);
-    });
-
     function updateTokenCount() {
         const fs = require('fs');
         const selectedNodes = $('#file-tree').jstree('get_checked', true);
@@ -365,18 +395,10 @@
         return stats.size;
     }
 
-    $('#copy-context').on('click', () => {
-        const selectedNodes = $('#file-tree').jstree('get_checked', true);
-        let context = '';
-        selectedNodes.forEach(node => {
-            if (node.type === 'file') {
-                const content = fs.readFileSync(node.original.path, 'utf8');
-                context += `File Path: ${node.original.path}\nFile Content:\n${content}\n\n`;
-            }
-        });
-        require('nw.gui').Clipboard.get().set(context, 'text');
-        alert('Контекст скопирован в буфер обмена');
-    });
+    // Добавим функцию для получения относительного пути
+    function getRelativePath(fullPath) {
+        return path.relative(projectPath, fullPath);
+    }
 
     function saveTemplate() {
         const currentTemplate = $('#template-select').val();
@@ -384,34 +406,11 @@
         if (!name) return;
 
         const selectedNodes = $('#file-tree').jstree('get_checked', true);
-        const template = {
-            name: name,
-            selection: selectedNodes.map(node => node.original.path) // Сохраняем пути вместо идентификаторов
-        };
-        let templates = JSON.parse(localStorage.getItem('templates') || '[]');
-        templates = templates.filter(t => t.name !== name);
-        templates.push(template);
-        localStorage.setItem('templates', JSON.stringify(templates));
+        const template = selectedNodes.map(node => getRelativePath(node.original.path));
+        templates[name] = template;
         updateTemplateSelect();
-        saveTemplateToFile(template);
+        saveTemplateToFile(name, template);
         $('#template-select').val(name);
-    }
-
-    function loadTemplate() {
-        const templateName = $('#template-select').val();
-        if (!templateName) return;
-        const templates = JSON.parse(localStorage.getItem('templates') || '[]');
-        const template = templates.find(t => t.name === templateName);
-        if (template) {
-            $('#file-tree').jstree('uncheck_all');
-            template.selection.forEach(path => {
-                const node = $('#file-tree').jstree(true).get_node_by_path(path);
-                if (node) {
-                    $('#file-tree').jstree('check_node', node);
-                }
-            });
-            updateTokenCount();
-        }
     }
 
     function editTemplate() {
@@ -423,11 +422,9 @@
         const newName = prompt('Введите новое имя шаблона:', currentTemplate);
         if (!newName || newName === currentTemplate) return;
 
-        let templates = JSON.parse(localStorage.getItem('templates') || '[]');
         const templateIndex = templates.findIndex(t => t.name === currentTemplate);
         if (templateIndex !== -1) {
             templates[templateIndex].name = newName;
-            localStorage.setItem('templates', JSON.stringify(templates));
             updateTemplateSelect();
             // Обновляем файл с шаблонами
             const fs = require('fs');
@@ -450,24 +447,22 @@
         if (!templateName) return;
         if (!confirm(`Вы уверены, что хотите удалить шаблон "${templateName}"?`)) return;
 
-        let templates = JSON.parse(localStorage.getItem('templates') || '[]');
-        templates = templates.filter(t => t.name !== templateName);
-        localStorage.setItem('templates', JSON.stringify(templates));
+        console.log('Templates before deleting', templates)
+        delete templates[templateName];
         updateTemplateSelect();
         deleteTemplateFromFile(templateName);
     }
 
     function updateTemplateSelect() {
-        const templates = JSON.parse(localStorage.getItem('templates') || '[]');
         const $select = $('#template-select');
         $select.empty();
         $select.append($('<option>', {value: '', text: 'Выберите шаблон'}));
-        templates.forEach(template => {
-            $select.append($('<option>', {value: template.name, text: template.name}));
+        Object.keys(templates).forEach(templateName => {
+            $select.append($('<option>', {value: templateName, text: templateName}));
         });
     }
 
-    function saveTemplateToFile(template) {
+    function saveTemplateToFile(templateName, template) {
         const fs = require('fs');
         const path = require('path');
         const filePath = path.join(projectPath, 'ai.context.json');
@@ -475,7 +470,7 @@
         if (fs.existsSync(filePath)) {
             templates = JSON.parse(fs.readFileSync(filePath, 'utf8'));
         }
-        templates[template.name] = template.selection;
+        templates[templateName] = template;
         fs.writeFileSync(filePath, JSON.stringify(templates, null, 2));
     }
 
@@ -490,22 +485,16 @@
         }
     }
 
-    $('#save-template').on('click', saveTemplate);
-    $('#template-select').on('change', loadTemplate);
-    $('#edit-template').on('click', editTemplate);
-    $('#delete-template').on('click', deleteTemplate);
-
     // Инициализация
     updateTemplateSelect();
 
     function handleFileStructureChange() {
-        const templates = JSON.parse(localStorage.getItem('templates') || '[]');
-        templates.forEach(template => {
-            template.selection = template.selection.filter(path => {
-                return $('#file-tree').jstree(true).get_node_by_path(path);
+        Object.keys(templates).forEach(templateName => {
+            templates[templateName] = templates[templateName].filter(relativePath => {
+                const fullPath = path.join(projectPath, relativePath);
+                return fs.existsSync(fullPath);
             });
         });
-        localStorage.setItem('templates', JSON.stringify(templates));
         updateTemplateSelect();
     }
 
@@ -537,27 +526,13 @@
             });
     }
 
-    $('#select-project').on('click', () => {
-        watchProjectChanges();
-    });
+
 
     function updateFileContent(filePath) {
         if (editor.getValue() !== fs.readFileSync(filePath, 'utf8')) {
             openFile(filePath);
         }
     }
-
-    let currentOpenedFile = '';
-    $('#file-tree').on('changed.jstree', (e, data) => {
-        if (data.node && data.node.type === 'file') {
-            currentOpenedFile = data.node.original.path;
-            const watcher = fs.watch(currentOpenedFile, (eventType, filename) => {
-                if (eventType === 'change') {
-                    updateFileContent(currentOpenedFile);
-                }
-            });
-        }
-    });
 
     editor.commands.addCommand({
         name: 'saveFile',
@@ -575,55 +550,6 @@
         console.log(`Loading progress: ${progress}%`);
         // Здесь можно добавить код для отображения прогресса загрузки в UI
     }
-
-    function readFileAsync(filePath, callback) {
-        const chunkSize = 1024 * 1024; // 1 MB chunks
-        const fileSize = fs.statSync(filePath).size;
-        let offset = 0;
-        let progress = 0;
-        let fileContent = '';
-
-        function readChunk() {
-            const buffer = Buffer.alloc(chunkSize);
-            fs.read(fs.openSync(filePath, 'r'), buffer, 0, chunkSize, offset, (err, bytesRead, buffer) => {
-                if (err) {
-                    callback(err);
-                    return;
-                }
-
-                fileContent += buffer.toString('utf8', 0, bytesRead);
-                offset += bytesRead;
-                progress = Math.round((offset / fileSize) * 100);
-                updateLoadingProgress(progress);
-
-                if (offset < fileSize) {
-                    readChunk();
-                } else {
-                    callback(null, fileContent);
-                }
-            });
-        }
-
-        readChunk();
-    }
-
-    function openFile(filePath) {
-        readFileAsync(filePath, (err, content) => {
-            if (err) {
-                console.error('Ошибка при чтении файла:', err);
-                return;
-            }
-            editor.setValue(content);
-            editor.clearSelection();
-
-            const extension = path.extname(filePath).slice(1);
-            const mode = getAceMode(extension);
-            editor.session.setMode(`ace/mode/${mode}`);
-
-            $('#lang-select').val(mode);
-        });
-    }
-
     // Функция для изменения размера панелей
     function initializeResizer() {
         const leftPanel = document.getElementById('left-panel');
@@ -663,6 +589,64 @@
     updateTemplateSelect();
     watchProjectChanges();
     initializeResizer();
+
+    $('#copy-context').on('click', () => {
+        const selectedNodes = $('#file-tree').jstree('get_checked', true);
+        let context = '';
+        selectedNodes.forEach(node => {
+            if (node.type === 'file') {
+                const content = fs.readFileSync(node.original.path, 'utf8');
+                context += `File Path: ${node.original.path}\nFile Content:\n${content}\n\n`;
+            }
+        });
+        require('nw.gui').Clipboard.get().set(context, 'text');
+        alert('Контекст скопирован в буфер обмена');
+    });
+
+    $('#save-template').on('click', saveTemplate);
+    $('#template-select').on('change', function() {
+        loadTemplate($(this).val());
+    });
+    $('#edit-template').on('click', editTemplate);
+    $('#delete-template').on('click', deleteTemplate);
+
+    $('#lang-select').on('change', function () {
+        const selectedMode = $(this).val();
+        editor.session.setMode(`ace/mode/${selectedMode}`);
+    });
+
+    $('#zoom-select').on('change', function () {
+        const zoom = parseFloat($(this).val());
+        editor.setOption("fontSize", 16 * zoom);
+    });
+
+    let currentOpenedFile = '';
+    $('#file-tree').on('changed.jstree', (e, data) => {
+        if (data.node && data.node.type === 'file') {
+            currentOpenedFile = data.node.original.path;
+            const watcher = fs.watch(currentOpenedFile, (eventType, filename) => {
+                if (eventType === 'change') {
+                    updateFileContent(currentOpenedFile);
+                }
+            });
+        }
+    });
+
+    // Выбор директории проекта
+    $('#select-project').on('click', () => {
+        const chooser = document.createElement('input');
+        chooser.type = 'file';
+        chooser.nwdirectory = true;
+
+        chooser.addEventListener('change', (event) => {
+            projectPath = chooser.value;
+            updateFileTree();
+            loadTemplatesFromFile();
+            watchProjectChanges();
+        });
+
+        chooser.click();
+    });
 </script>
 </body>
 </html>
