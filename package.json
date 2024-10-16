@@ -1,0 +1,39 @@
+{
+  "name": "nwjs-ollama-ide",
+  "version": "1.0.0",
+  "description": "IDE-подобное приложение для работы с Ollama AI",
+  "main": "index.html",
+  "node-remote": "<all_urls>",
+  "chromium-args": "--disable-web-security",
+  "permissions": [
+    "fileSystem",
+    {
+      "fileSystem": ["write", "retainEntries", "directory"]
+    }
+  ],
+  "scripts": {
+    "start": "nw ."
+  },
+  "keywords": ["nwjs", "ollama", "ide"],
+  "author": "Ваше имя",
+  "license": "MIT",
+  "dependencies": {
+    "jquery": "^3.6.0",
+    "jstree": "^3.3.12",
+    "ace-builds": "^1.9.6"
+  },
+  "devDependencies": {
+    "nw": "^0.58.0"
+  },
+  "window": {
+    "title": "NWJS Ollama IDE",
+    "width": 1024,
+    "height": 768,
+    "min_width": 800,
+    "min_height": 600,
+    "position": "center"
+  },
+  "webkit": {
+    "plugin": true
+  }
+}

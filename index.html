@@ -1,0 +1,346 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>NWJS Ollama IDE</title>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/jstree/3.3.12/themes/default-dark/style.min.css">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/bulma/0.9.3/css/bulma.min.css">
+    <style>
+        body {
+            display: flex;
+            height: 100vh;
+            margin: 0;
+            font-family: Arial, sans-serif;
+            background-color: #1a1a1a;
+            color: #ffffff;
+        }
+        #left-panel {
+            width: 300px;
+            display: flex;
+            flex-direction: column;
+            border-right: 1px solid #444;
+            background-color: #2a2a2a;
+        }
+        #file-tree {
+            flex-grow: 1;
+            overflow-y: auto;
+            padding: 10px;
+        }
+        #context-info {
+            padding: 10px;
+            border-top: 1px solid #444;
+        }
+        #editor-panel {
+            flex-grow: 1;
+            display: flex;
+            flex-direction: column;
+        }
+        #editor {
+            flex-grow: 1;
+            width: 100%;
+        }
+        #language-select {
+            padding: 10px;
+            background-color: #2a2a2a;
+        }
+        .jstree-default-dark .jstree-clicked {
+            background-color: #4a4a4a !important;
+        }
+    </style>
+</head>
+<body>
+<div id="left-panel">
+    <button id="select-project" class="button is-primary is-fullwidth">Выбрать директорию проекта</button>
+    <div id="file-tree"></div>
+    <div id="context-info">
+        <div>Токенов в контексте: <span id="token-count">0</span></div>
+        <button id="copy-context" class="button is-info is-small">Копировать контекст</button>
+    </div>
+    <div id="templates">
+        <select id="template-select">
+            <option value="">Выберите шаблон</option>
+        </select>
+        <input type="text" id="template-name" placeholder="Имя шаблона">
+        <button id="save-template" class="button is-success is-small">Сохранить шаблон</button>
+        <button id="delete-template" class="button is-danger is-small">Удалить шаблон</button>
+    </div>
+</div>
+<div id="editor-panel">
+    <div id="editor"></div>
+    <div id="language-select">
+        <select id="lang-select"></select>
+    </div>
+</div>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jquery/3.6.0/jquery.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jstree/3.3.12/jstree.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/ace/1.4.12/ace.js"></script>
+<script>
+    const fs = nw.require('fs');
+    const path = nw.require('path');
+    const gui = require('nw.gui');
+
+    let projectPath = '';
+    let editor = ace.edit("editor");
+    editor.setTheme("ace/theme/monokai");
+    editor.session.setMode("ace/mode/javascript");
+
+    // Обновленная функция для выбора директории проекта
+    $('#select-project').on('click', () => {
+        const chooser = document.createElement('input');
+        chooser.type = 'file';
+        chooser.nwdirectory = true;  // Это свойство NWJS для выбора только директорий
+
+        chooser.addEventListener('change', (event) => {
+            projectPath = chooser.value;
+            updateFileTree();
+        });
+
+        chooser.click();
+    });
+
+    // Обновленная функция getDirectoryStructure
+    function getDirectoryStructure(dir) {
+        const fs = nw.require('fs');
+        const path = nw.require('path');
+
+        function readDir(currentDir) {
+            let files;
+            try {
+                files = fs.readdirSync(currentDir);
+            } catch (error) {
+                console.error(`Ошибка при чтении директории ${currentDir}:`, error);
+                return [];
+            }
+
+            return files.map(file => {
+                const filePath = path.join(currentDir, file);
+                let stats;
+                try {
+                    stats = fs.statSync(filePath);
+                } catch (error) {
+                    console.error(`Ошибка при получении информации о файле ${filePath}:`, error);
+                    return null;
+                }
+
+                if (stats.isDirectory()) {
+                    return {
+                        text: file,
+                        children: readDir(filePath),
+                        path: filePath,
+                        type: 'folder'
+                    };
+                } else {
+                    return {
+                        text: file,
+                        path: filePath,
+                        type: 'file'
+                    };
+                }
+            }).filter(item => item !== null);
+        }
+
+        return readDir(dir);
+    }
+
+    // Обновленная функция updateFileTree
+    function updateFileTree() {
+        if (!projectPath) return;
+
+        const structure = getDirectoryStructure(projectPath);
+        $('#file-tree').jstree('destroy');
+        $('#file-tree').jstree({
+            core: {
+                data: structure,
+                themes: {
+                    name: 'default-dark',
+                    dots: false,
+                    icons: true
+                },
+                check_callback: true
+            },
+            plugins: ['checkbox', 'types'],
+            types: {
+                file: {
+                    icon: 'jstree-file'
+                },
+                folder: {
+                    icon: 'jstree-folder'
+                }
+            },
+            checkbox: {
+                three_state: true,
+                whole_node: false,
+                tie_selection: false
+            }
+        });
+
+        $('#file-tree').on('changed.jstree', (e, data) => {
+            if (data.node && data.node.type === 'file') {
+                openFile(data.node.original.path);
+            }
+            updateTokenCount();
+        });
+    }
+
+    // Функция открытия файла в редакторе
+    function openFile(filePath) {
+        const fs = require('fs');
+        const path = require('path');
+
+        fs.readFile(filePath, 'utf8', (err, content) => {
+            if (err) {
+                console.error('Ошибка при чтении файла:', err);
+                return;
+            }
+            editor.setValue(content);
+            editor.clearSelection();
+
+            const extension = path.extname(filePath).slice(1);
+            const mode = getAceMode(extension);
+            editor.session.setMode(`ace/mode/${mode}`);
+
+            $('#lang-select').val(mode);
+        });
+    }
+
+    // Функция определения режима Ace на основе расширения файла
+    function getAceMode(extension) {
+        const modeMap = {
+            'js': 'javascript',
+            'py': 'python',
+            'html': 'html',
+            'css': 'css',
+            // Добавьте другие соответствия по необходимости
+        };
+        return modeMap[extension] || 'text';
+    }
+
+    // Заполнение выпадающего списка языков
+    const languages = ['javascript', 'python', 'html', 'css', 'java', 'c_cpp', 'ruby', 'php'];
+    languages.forEach(lang => {
+        $('#lang-select').append($('<option>', {
+            value: lang,
+            text: lang.charAt(0).toUpperCase() + lang.slice(1)
+        }));
+    });
+
+    // Обработчик изменения языка
+    $('#lang-select').on('change', function() {
+        const selectedMode = $(this).val();
+        editor.session.setMode(`ace/mode/${selectedMode}`);
+    });
+
+    // Функция подсчета токенов (заглушка)
+    function updateTokenCount() {
+        const fs = require('fs');
+        const selectedNodes = $('#file-tree').jstree('get_checked', true);
+        let tokenCount = 0;
+        selectedNodes.forEach(node => {
+            if (node.type === 'file') {
+                const content = fs.readFileSync(node.original.path, 'utf8');
+                tokenCount += content.split(/\s+/).length; // Простой подсчет слов
+            }
+        });
+        $('#token-count').text(tokenCount);
+    }
+
+    // Копирование контекста
+    $('#copy-context').on('click', () => {
+        const selectedNodes = $('#file-tree').jstree('get_checked', true);
+        let context = '';
+        selectedNodes.forEach(node => {
+            if (node.type === 'file') {
+                const content = fs.readFileSync(node.original.path, 'utf8');
+                context += `File Path: ${node.original.path}\nFile Content:\n${content}\n\n`;
+            }
+        });
+        require('nw.gui').Clipboard.get().set(context, 'text');
+        alert('Контекст скопирован в буфер обмена');
+    });
+
+    // Функции для работы с шаблонами
+    function saveTemplate() {
+        const name = $('#template-name').val();
+        if (!name) {
+            alert('Пожалуйста, введите имя шаблона');
+            return;
+        }
+        const selectedNodes = $('#file-tree').jstree('get_checked', true);
+        const template = {
+            name: name,
+            selection: selectedNodes.map(node => node.id)
+        };
+        let templates = JSON.parse(localStorage.getItem('templates') || '[]');
+        templates.push(template);
+        localStorage.setItem('templates', JSON.stringify(templates));
+        updateTemplateSelect();
+        saveTemplateToFile(template);
+    }
+
+    function loadTemplate() {
+        const templateName = $('#template-select').val();
+        if (!templateName) return;
+        const templates = JSON.parse(localStorage.getItem('templates') || '[]');
+        const template = templates.find(t => t.name === templateName);
+        if (template) {
+            $('#file-tree').jstree('uncheck_all');
+            template.selection.forEach(nodeId => {
+                $('#file-tree').jstree('check_node', nodeId);
+            });
+        }
+    }
+
+    function deleteTemplate() {
+        const templateName = $('#template-select').val();
+        if (!templateName) return;
+        let templates = JSON.parse(localStorage.getItem('templates') || '[]');
+        templates = templates.filter(t => t.name !== templateName);
+        localStorage.setItem('templates', JSON.stringify(templates));
+        updateTemplateSelect();
+        deleteTemplateFromFile(templateName);
+    }
+
+    function updateTemplateSelect() {
+        const templates = JSON.parse(localStorage.getItem('templates') || '[]');
+        const $select = $('#template-select');
+        $select.empty();
+        $select.append($('<option>', { value: '', text: 'Выберите шаблон' }));
+        templates.forEach(template => {
+            $select.append($('<option>', { value: template.name, text: template.name }));
+        });
+    }
+
+    function saveTemplateToFile(template) {
+        const fs = require('fs');
+        const path = require('path');
+        const filePath = path.join(projectPath, 'ai.context.json');
+        let templates = {};
+        if (fs.existsSync(filePath)) {
+            templates = JSON.parse(fs.readFileSync(filePath, 'utf8'));
+        }
+        templates[template.name] = template.selection;
+        fs.writeFileSync(filePath, JSON.stringify(templates, null, 2));
+    }
+
+    function deleteTemplateFromFile(templateName) {
+        const fs = require('fs');
+        const path = require('path');
+        const filePath = path.join(projectPath, 'ai.context.json');
+        if (fs.existsSync(filePath)) {
+            let templates = JSON.parse(fs.readFileSync(filePath, 'utf8'));
+            delete templates[templateName];
+            fs.writeFileSync(filePath, JSON.stringify(templates, null, 2));
+        }
+    }
+
+    $('#save-template').on('click', saveTemplate);
+    $('#template-select').on('change', loadTemplate);
+    $('#delete-template').on('click', deleteTemplate);
+
+    // Инициализация
+    updateTemplateSelect();
+</script>
+</body>
+</html>
