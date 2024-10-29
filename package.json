@@ -27,8 +27,8 @@
   },
   "window": {
     "title": "NWJS Ollama IDE",
-    "width": 1024,
     "height": 768,
+    "resizable": true,
     "min_width": 800,
     "min_height": 600,
     "position": "center"
