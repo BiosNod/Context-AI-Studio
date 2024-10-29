@@ -125,6 +125,12 @@
                 Удалить многострочные комментарии
             </label>
         </div>
+        <div class="form-check mt-2">
+            <input class="form-check-input" type="checkbox" id="convert-spaces-to-tabs">
+            <label class="form-check-label" for="convert-spaces-to-tabs">
+                Замена 2х пробелов на 1 табуляцию
+            </label>
+        </div>
         <button id="copy-context" class="btn btn-info btn-sm mt-2 w-100">Копировать контекст</button>
     </div>
     <div id="templates" class="mt-2">
@@ -172,6 +178,26 @@
     editor.setOption("fontSize", 16);
 
     let templates = {};
+
+    function convertSpacesToTabs(content) {
+        return content.replace(/ {2}/g, '\t');
+    }
+
+    function processContent(content, options = {}) {
+        let processedContent = content;
+
+        // Удаление комментариев, если включено
+        if (options.removeSingle || options.removeMulti) {
+            processedContent = removeComments(processedContent, options.removeSingle, options.removeMulti);
+        }
+
+        // Замена пробелов на табуляцию, если включено
+        if (options.convertSpacesToTabs) {
+            processedContent = convertSpacesToTabs(processedContent);
+        }
+
+        return processedContent;
+    }
 
     function removeComments(content, removeSingle = false, removeMulti = false) {
         // Если ни один из флагов не активен, возвращаем контент без изменений
@@ -430,14 +456,16 @@
         let tokenCount = 0;
         let totalSize = 0;
 
-        const removeSingleComments = $('#remove-single-comments').is(':checked');
-        const removeMultiComments = $('#remove-multi-comments').is(':checked');
+        const options = {
+            removeSingle: $('#remove-single-comments').is(':checked'),
+            removeMulti: $('#remove-multi-comments').is(':checked'),
+            convertSpacesToTabs: $('#convert-spaces-to-tabs').is(':checked')
+        };
 
         selectedNodes.forEach(node => {
             if (node.type === 'file') {
                 let content = fs.readFileSync(node.original.path, 'utf8');
-                content = removeComments(content, removeSingleComments, removeMultiComments);
-                // Count only non-empty tokens
+                content = processContent(content, options);
                 tokenCount += content.split(/\s+/).filter(token => token.length > 0).length;
                 totalSize += Buffer.from(content).length;
             }
@@ -655,14 +683,17 @@
 
     $('#copy-context').on('click', () => {
         const selectedNodes = $('#file-tree').jstree('get_checked', true);
-        const removeSingleComments = $('#remove-single-comments').is(':checked');
-        const removeMultiComments = $('#remove-multi-comments').is(':checked');
+        const options = {
+            removeSingle: $('#remove-single-comments').is(':checked'),
+            removeMulti: $('#remove-multi-comments').is(':checked'),
+            convertSpacesToTabs: $('#convert-spaces-to-tabs').is(':checked')
+        };
 
         let context = '';
         selectedNodes.forEach(node => {
             if (node.type === 'file') {
                 let content = fs.readFileSync(node.original.path, 'utf8');
-                content = removeComments(content, removeSingleComments, removeMultiComments);
+                content = processContent(content, options);
                 context += `File Path: ${node.original.path}\nFile Content:\n${content}\n\n`;
             }
         });
@@ -671,7 +702,7 @@
     });
 
     // Add event listeners for checkboxes
-    $('#remove-single-comments, #remove-multi-comments').on('change', () => {
+    $('#remove-single-comments, #remove-multi-comments, #convert-spaces-to-tabs').on('change', () => {
         updateTokenCount();
     });
 
