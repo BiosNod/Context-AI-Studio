@@ -113,6 +113,18 @@
     <div id="file-tree"></div>
     <div id="context-info" class="mt-2">
         <div>Токенов в контексте: <span id="token-count">0</span></div>
+        <div class="form-check mt-2">
+            <input class="form-check-input" type="checkbox" id="remove-single-comments">
+            <label class="form-check-label" for="remove-single-comments">
+                Удалить однострочные комментарии
+            </label>
+        </div>
+        <div class="form-check mt-2">
+            <input class="form-check-input" type="checkbox" id="remove-multi-comments">
+            <label class="form-check-label" for="remove-multi-comments">
+                Удалить многострочные комментарии
+            </label>
+        </div>
         <button id="copy-context" class="btn btn-info btn-sm mt-2 w-100">Копировать контекст</button>
     </div>
     <div id="templates" class="mt-2">
@@ -160,6 +172,50 @@
     editor.setOption("fontSize", 16);
 
     let templates = {};
+
+    function removeComments(content, removeSingle = false, removeMulti = false) {
+        // Если ни один из флагов не активен, возвращаем контент без изменений
+        if (!removeSingle && !removeMulti) {
+            return content;
+        }
+
+        let processedContent = content;
+
+        if (removeMulti) {
+            // Заменяем многострочные комментарии, сохраняя структуру переносов строк
+            processedContent = processedContent.replace(/'''[\s\S]*?'''|"""[\s\S]*?"""/g, match =>
+                match.split('\n').map(() => '').join('\n')
+            );
+            processedContent = processedContent.replace(/\/\*[\s\S]*?\*\//g, match =>
+                match.split('\n').map(() => '').join('\n')
+            );
+        }
+
+        if (removeSingle) {
+            // Обрабатываем построчно
+            const lines = processedContent.split('\n');
+            const processedLines = lines.map(line => {
+                const trimmedLine = line.trim();
+
+                // Если строка начинается с комментария, возвращаем пустую строку
+                if (trimmedLine.startsWith('#') || trimmedLine.startsWith('//')) {
+                    return '';
+                }
+
+                // Удаляем инлайн-комментарии, сохраняя код до них
+                return line.replace(/(?:^|\s)(\/\/|#).*$/, '').trimRight();
+            });
+
+            // Собираем строки обратно, сохраняя все переносы
+            processedContent = processedLines.join('\n');
+        }
+
+        // Убираем случаи где образовалось больше двух переносов подряд из-за удаления комментариев
+        processedContent = processedContent
+            .replace(/\n\n\n+/g, '\n\n');  // Три и более переноса заменяем на два
+
+        return processedContent;
+    }
 
     function getDirectoryStructure(dir) {
         const fs = nw.require('fs');
@@ -373,13 +429,20 @@
         const selectedNodes = $('#file-tree').jstree('get_checked', true);
         let tokenCount = 0;
         let totalSize = 0;
+
+        const removeSingleComments = $('#remove-single-comments').is(':checked');
+        const removeMultiComments = $('#remove-multi-comments').is(':checked');
+
         selectedNodes.forEach(node => {
             if (node.type === 'file') {
-                const content = fs.readFileSync(node.original.path, 'utf8');
-                tokenCount += content.split(/\s+/).length;
-                totalSize += getFileSize(node.original.path);
+                let content = fs.readFileSync(node.original.path, 'utf8');
+                content = removeComments(content, removeSingleComments, removeMultiComments);
+                // Count only non-empty tokens
+                tokenCount += content.split(/\s+/).filter(token => token.length > 0).length;
+                totalSize += Buffer.from(content).length;
             }
         });
+
         $('#token-count').text(`${tokenCount} (${formatFileSize(totalSize)})`);
     }
 
@@ -592,15 +655,24 @@
 
     $('#copy-context').on('click', () => {
         const selectedNodes = $('#file-tree').jstree('get_checked', true);
+        const removeSingleComments = $('#remove-single-comments').is(':checked');
+        const removeMultiComments = $('#remove-multi-comments').is(':checked');
+
         let context = '';
         selectedNodes.forEach(node => {
             if (node.type === 'file') {
-                const content = fs.readFileSync(node.original.path, 'utf8');
+                let content = fs.readFileSync(node.original.path, 'utf8');
+                content = removeComments(content, removeSingleComments, removeMultiComments);
                 context += `File Path: ${node.original.path}\nFile Content:\n${content}\n\n`;
             }
         });
         require('nw.gui').Clipboard.get().set(context, 'text');
         alert('Контекст скопирован в буфер обмена');
+    });
+
+    // Add event listeners for checkboxes
+    $('#remove-single-comments, #remove-multi-comments').on('change', () => {
+        updateTokenCount();
     });
 
     $('#save-template').on('click', saveTemplate);
