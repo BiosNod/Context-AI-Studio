@@ -1,5 +1,7 @@
 ### Context AI Studio
 
+![Image alt](preview.jpg)
+
 1. Run app: nwjs.exe <project_path>
 2. Select your project
 3. Select your scripts to include to context
