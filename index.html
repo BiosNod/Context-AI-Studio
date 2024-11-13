@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<html lang="ru">
+<html lang="en">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
@@ -109,37 +109,37 @@
 </head>
 <body class="bg-dark text-light">
 <div id="left-panel">
-    <button id="select-project" class="btn btn-primary w-100">Выбрать директорию проекта</button>
+    <button id="select-project" class="btn btn-primary w-100">Select Project Directory</button>
     <div id="file-tree"></div>
     <div id="context-info" class="mt-2">
-        <div>Токенов в контексте: <span id="token-count">0</span></div>
+        <div>Tokens in context: <span id="token-count">0</span></div>
         <div class="form-check mt-2">
             <input class="form-check-input" type="checkbox" id="remove-single-comments">
             <label class="form-check-label" for="remove-single-comments">
-                Удалить однострочные комментарии
+                Remove single-line comments
             </label>
         </div>
         <div class="form-check mt-2">
             <input class="form-check-input" type="checkbox" id="remove-multi-comments">
             <label class="form-check-label" for="remove-multi-comments">
-                Удалить многострочные комментарии
+                Remove multi-line comments
             </label>
         </div>
         <div class="form-check mt-2">
             <input class="form-check-input" type="checkbox" id="convert-spaces-to-tabs">
             <label class="form-check-label" for="convert-spaces-to-tabs">
-                Замена 2х пробелов на 1 табуляцию
+                Replace 2 spaces with 1 tab
             </label>
         </div>
-        <button id="copy-context" class="btn btn-info btn-sm mt-2 w-100">Копировать контекст</button>
+        <button id="copy-context" class="btn btn-info btn-sm mt-2 w-100">Copy Context</button>
     </div>
     <div id="templates" class="mt-2">
         <select id="template-select" class="form-select bg-dark text-light">
-            <option value="">Выберите шаблон</option>
+            <option value="">Select Template</option>
         </select>
-        <button id="save-template" class="btn btn-success btn-sm template-btn" title="Сохранить шаблон"><i class="bi bi-save"></i></button>
-        <button id="edit-template" class="btn btn-warning btn-sm template-btn" title="Редактировать шаблон"><i class="bi bi-pencil"></i></button>
-        <button id="delete-template" class="btn btn-danger btn-sm template-btn" title="Удалить шаблон"><i class="bi bi-trash"></i></button>
+        <button id="save-template" class="btn btn-success btn-sm template-btn" title="Save Template"><i class="bi bi-save"></i></button>
+        <button id="edit-template" class="btn btn-warning btn-sm template-btn" title="Edit Template"><i class="bi bi-pencil"></i></button>
+        <button id="delete-template" class="btn btn-danger btn-sm template-btn" title="Delete Template"><i class="bi bi-trash"></i></button>
     </div>
 </div>
 <div id="resizer"></div>
@@ -186,12 +186,12 @@
     function processContent(content, options = {}) {
         let processedContent = content;
 
-        // Удаление комментариев, если включено
+        // Delete commits if enabled
         if (options.removeSingle || options.removeMulti) {
             processedContent = removeComments(processedContent, options.removeSingle, options.removeMulti);
         }
 
-        // Замена пробелов на табуляцию, если включено
+        // Replace spaces if enabled
         if (options.convertSpacesToTabs) {
             processedContent = convertSpacesToTabs(processedContent);
         }
@@ -200,7 +200,7 @@
     }
 
     function removeComments(content, removeSingle = false, removeMulti = false) {
-        // Если ни один из флагов не активен, возвращаем контент без изменений
+        //If no one from flags selected - return content without changes
         if (!removeSingle && !removeMulti) {
             return content;
         }
@@ -208,7 +208,7 @@
         let processedContent = content;
 
         if (removeMulti) {
-            // Заменяем многострочные комментарии, сохраняя структуру переносов строк
+            // Replace multiline commits and and keep original line structure
             processedContent = processedContent.replace(/'''[\s\S]*?'''|"""[\s\S]*?"""/g, match =>
                 match.split('\n').map(() => '').join('\n')
             );
@@ -218,27 +218,28 @@
         }
 
         if (removeSingle) {
-            // Обрабатываем построчно
+            // Process line by line
             const lines = processedContent.split('\n');
             const processedLines = lines.map(line => {
                 const trimmedLine = line.trim();
 
-                // Если строка начинается с комментария, возвращаем пустую строку
+                // If string starts with comment - return empty string
                 if (trimmedLine.startsWith('#') || trimmedLine.startsWith('//')) {
                     return '';
                 }
 
-                // Удаляем инлайн-комментарии, сохраняя код до них
+                // Remove inline comments and keep code before
                 return line.replace(/(?:^|\s)(\/\/|#).*$/, '').trimRight();
             });
 
-            // Собираем строки обратно, сохраняя все переносы
+            // Join lines and keep next lines
             processedContent = processedLines.join('\n');
         }
 
-        // Убираем случаи где образовалось больше двух переносов подряд из-за удаления комментариев
+        // Fix moments where is 3+ next lines due to deletions
         processedContent = processedContent
-            .replace(/\n\n\n+/g, '\n\n');  // Три и более переноса заменяем на два
+            // 3+ next lines replace to 2
+            .replace(/\n\n\n+/g, '\n\n');
 
         return processedContent;
     }
@@ -252,7 +253,7 @@
             try {
                 files = fs.readdirSync(currentDir);
             } catch (error) {
-                console.error(`Ошибка при чтении директории ${currentDir}:`, error);
+                console.error(`Error reading directory ${currentDir}:`, error);
                 return [];
             }
 
@@ -262,7 +263,7 @@
                 try {
                     stats = fs.statSync(filePath);
                 } catch (error) {
-                    console.error(`Ошибка при получении информации о файле ${filePath}:`, error);
+                    console.error(`Error getting file info ${filePath}:`, error);
                     return null;
                 }
 
@@ -330,28 +331,27 @@
             updateTokenCount();
         });
 
-        // Загружаем шаблоны и первый шаблон после полной инициализации дерева
+        // Load templates and first template after full tree initialization
         $('#file-tree').on('ready.jstree', function() {
-            console.log('Tree is ready'); // Логирование для отладки
+            console.log('Tree is ready');
             loadTemplatesFromFile();
             loadFirstTemplate();
         });
     }
 
-    // Новая функция для загрузки первого доступного шаблона
+    // Load first available project template
     function loadFirstTemplate() {
         const templateNames = Object.keys(templates);
         if (templateNames.length > 0) {
             const firstTemplateName = templateNames[0];
             $('#template-select').val(firstTemplateName);
-            console.log('Loading first template:', firstTemplateName); // Логирование для отладки
+            console.log('Loading first template:', firstTemplateName);
             loadTemplate(firstTemplateName);
         } else {
-            console.log('No templates available'); // Логирование для отладки
+            console.log('No templates available');
         }
     }
 
-    // Добавим плагин path для jstree
     $.jstree.plugins.path = function () {
         this.get_node_by_path = function (fullPath) {
             let node = null;
@@ -376,7 +376,6 @@
         }
     }
 
-    // Обновленная функция loadTemplate, которая теперь может принимать имя шаблона
     function loadTemplate(templateName) {
         templateName = templateName || $('#template-select').val();
         if (!templateName) return;
@@ -385,12 +384,12 @@
             $('#file-tree').jstree('uncheck_all');
 
             let treeInstance = $('#file-tree').jstree(true);
-            // Пример итерации по узлам и получения полного пути для каждого файла
+            // Iteration on nodes and get full path for each file
             treeInstance.get_json('#', { flat: true }).forEach(function (node) {
-                // Получаем узел через get_node для доступа к original
+                // Get node from get_node to access to original
                 let fullNode = treeInstance.get_node(node.id);
                 let relativePath = getRelativePath(fullNode.original.path)
-                console.log(relativePath); // Полный путь к файлу
+                console.log(relativePath);
                 if (template.includes(relativePath))
                     $('#file-tree').jstree('check_node', node);
             });
@@ -405,7 +404,7 @@
 
         fs.readFile(filePath, 'utf8', (err, content) => {
             if (err) {
-                console.error('Ошибка при чтении файла:', err);
+                console.error('Error reading file:', err);
                 return;
             }
             editor.setValue(content);
@@ -486,14 +485,13 @@
         return stats.size;
     }
 
-    // Добавим функцию для получения относительного пути
     function getRelativePath(fullPath) {
         return path.relative(projectPath, fullPath);
     }
 
     function saveTemplate() {
         const currentTemplate = $('#template-select').val();
-        const name = prompt('Введите имя шаблона:', currentTemplate || '');
+        const name = prompt('Enter template name:', currentTemplate || '');
         if (!name) return;
 
         const selectedNodes = $('#file-tree').jstree('get_checked', true);
@@ -507,17 +505,17 @@
     function editTemplate() {
         const currentTemplate = $('#template-select').val();
         if (!currentTemplate) {
-            alert('Пожалуйста, выберите шаблон для редактирования');
+            alert('Please select a template to edit');
             return;
         }
-        const newName = prompt('Введите новое имя шаблона:', currentTemplate);
+        const newName = prompt('Enter new template name:', currentTemplate);
         if (!newName || newName === currentTemplate) return;
 
         const templateIndex = templates.findIndex(t => t.name === currentTemplate);
         if (templateIndex !== -1) {
             templates[templateIndex].name = newName;
             updateTemplateSelect();
-            // Обновляем файл с шаблонами
+            // Update file with templates
             const fs = require('fs');
             const path = require('path');
             const filePath = path.join(projectPath, 'ai.context.json');
@@ -529,14 +527,15 @@
                     fs.writeFileSync(filePath, JSON.stringify(fileTemplates, null, 2));
                 }
             }
-            $('#template-select').val(newName);  // Выбираем отредактированный шаблон
+            // Choosing edited template
+            $('#template-select').val(newName);
         }
     }
 
     function deleteTemplate() {
         const templateName = $('#template-select').val();
         if (!templateName) return;
-        if (!confirm(`Вы уверены, что хотите удалить шаблон "${templateName}"?`)) return;
+        if (!confirm(`Are you sure you want to delete template "${templateName}"?`)) return;
 
         console.log('Templates before deleting', templates)
         delete templates[templateName];
@@ -547,7 +546,7 @@
     function updateTemplateSelect() {
         const $select = $('#template-select');
         $select.empty();
-        $select.append($('<option>', {value: '', text: 'Выберите шаблон'}));
+        $select.append($('<option>', {value: '', text: 'Select Template'}));
         Object.keys(templates).forEach(templateName => {
             $select.append($('<option>', {value: templateName, text: templateName}));
         });
@@ -576,7 +575,7 @@
         }
     }
 
-    // Инициализация
+    // Initialization
     updateTemplateSelect();
 
     function handleFileStructureChange() {
@@ -617,8 +616,6 @@
             });
     }
 
-
-
     function updateFileContent(filePath) {
         if (editor.getValue() !== fs.readFileSync(filePath, 'utf8')) {
             openFile(filePath);
@@ -639,9 +636,9 @@
 
     function updateLoadingProgress(progress) {
         console.log(`Loading progress: ${progress}%`);
-        // Здесь можно добавить код для отображения прогресса загрузки в UI
+        // Todo: male a progress bar in UI
     }
-    // Функция для изменения размера панелей
+
     function initializeResizer() {
         const leftPanel = document.getElementById('left-panel');
         const resizer = document.getElementById('resizer');
@@ -656,7 +653,8 @@
             body.classList.add('resizing');
             document.addEventListener('mousemove', resize);
             document.addEventListener('mouseup', stopResize);
-            e.preventDefault(); // Предотвращаем выделение текста
+            // Prevent text selection
+            e.preventDefault();
         }
 
         function resize(e) {
@@ -670,13 +668,14 @@
             body.classList.remove('resizing');
             document.removeEventListener('mousemove', resize);
             document.removeEventListener('mouseup', stopResize);
-            editor.resize(); // Обновляем размер редактора Ace
+            // Update Ace editor text size
+            editor.resize();
         }
 
         resizer.addEventListener('mousedown', startResize);
     }
 
-    // Инициализация
+    // Initialization
     updateTemplateSelect();
     watchProjectChanges();
     initializeResizer();
@@ -698,7 +697,7 @@
             }
         });
         require('nw.gui').Clipboard.get().set(context, 'text');
-        alert('Контекст скопирован в буфер обмена');
+        alert('Context copied to clipboard');
     });
 
     // Add event listeners for checkboxes
@@ -735,7 +734,7 @@
         }
     });
 
-    // Выбор директории проекта
+    // Switch project dir
     $('#select-project').on('click', () => {
         const chooser = document.createElement('input');
         chooser.type = 'file';
