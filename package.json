@@ -1,39 +1,68 @@
 {
-  "name": "nwjs-ollama-ide",
-  "version": "1.0.0",
-  "description": "IDE-подобное приложение для работы с Ollama AI",
-  "main": "index.html",
-  "node-remote": "<all_urls>",
-  "chromium-args": "--disable-web-security",
-  "permissions": [
-    "fileSystem",
-    {
-      "fileSystem": ["write", "retainEntries", "directory"]
+    "app_name": "Context AI Studio",
+    "author": "biosnod",
+    "chromium-args": "--disable-web-security",
+    "dependencies": {
+        "ace-builds": "^1.9.6",
+        "jquery": "^3.6.0",
+        "jstree": "^3.3.12"
+    },
+    "description": "Context AI Studio",
+    "devDependencies": {
+        "nw": "^0.58.0"
+    },
+    "keywords": [
+        "nwjs",
+        "ollama",
+        "ide"
+    ],
+    "license": "MIT",
+    "main": "index.html",
+    "name": "nwjs-ollama-ide",
+    "node-remote": [
+        "<all_urls>"
+    ],
+    "nodejs": true,
+    "permissions": [
+        "fileSystem",
+        {
+            "fileSystem": [
+                "write",
+                "retainEntries",
+                "directory"
+            ]
+        }
+    ],
+    "scripts": {
+        "start": "nw ."
+    },
+    "version": "1.0.0",
+    "webexe_settings": {
+        "download_dir": "D:/software/programs/pc/programming/nwjs",
+        "force_download": false,
+        "linux-x32": false,
+        "linux-x64": false,
+        "mac-x64": false,
+        "nw_compression_level": 0,
+        "nw_version": "0.87.0",
+        "sdk_build": false,
+        "uncompressed_folder": true,
+        "windows-x32": false,
+        "windows-x64": true
+    },
+    "webkit": {
+        "plugin": true
+    },
+    "window": {
+        "frame": true,
+        "height": 768,
+        "id": "Context AI Studio",
+        "min_height": 600,
+        "min_width": 800,
+        "position": "center",
+        "resizable": true,
+        "show": true,
+        "title": "Context AI Studio",
+        "transparent": false
     }
-  ],
-  "scripts": {
-    "start": "nw ."
-  },
-  "keywords": ["nwjs", "ollama", "ide"],
-  "author": "Ваше имя",
-  "license": "MIT",
-  "dependencies": {
-    "jquery": "^3.6.0",
-    "jstree": "^3.3.12",
-    "ace-builds": "^1.9.6"
-  },
-  "devDependencies": {
-    "nw": "^0.58.0"
-  },
-  "window": {
-    "title": "NWJS Ollama IDE",
-    "height": 768,
-    "resizable": true,
-    "min_width": 800,
-    "min_height": 600,
-    "position": "center"
-  },
-  "webkit": {
-    "plugin": true
-  }
 }

@@ -166,8 +166,8 @@
 <script src="/assets/jstree-3.3.12/dist/jstree.min.js"></script>
 <script src="/assets/ace/ace.js"></script>
 <script>
-    const fs = nw.require('fs');
-    const path = nw.require('path');
+    const fs = require('fs');
+    const path = require('path');
     const gui = require('nw.gui');
 
     let projectPath = '';
@@ -245,9 +245,6 @@
     }
 
     function getDirectoryStructure(dir) {
-        const fs = nw.require('fs');
-        const path = nw.require('path');
-
         function readDir(currentDir) {
             let files;
             try {
@@ -293,6 +290,34 @@
         if (!projectPath) return;
 
         const structure = getDirectoryStructure(projectPath);
+
+        // Расширение jstree для поиска узла по полному пути
+        $.jstree.plugins.path = function () {
+            this.get_node_by_path = function (fullPath) {
+                console.log('Searching for node with path:', fullPath);
+                let node = null;
+
+                // Получаем все узлы дерева
+                const allNodes = this.get_json('#', { flat: true });
+                console.log('All nodes:', allNodes);
+
+                // Ищем узел с нужным путём
+                for (let i = 0; i < allNodes.length; i++) {
+                    const nodeId = allNodes[i].id;
+                    const fullNode = this.get_node(nodeId); // Получаем полный объект узла
+                    console.log('Checking node:', fullNode);
+
+                    if (fullNode.original && fullNode.original.path === fullPath) {
+                        node = fullNode;
+                        break; // Прерываем цикл, если узел найден
+                    }
+                }
+
+                console.log('Found node:', node);
+                return node;
+            };
+        };
+
         $('#file-tree').jstree('destroy');
         $('#file-tree').jstree({
             core: {
@@ -304,7 +329,7 @@
                 },
                 check_callback: true
             },
-            plugins: ['checkbox', 'types'],
+            plugins: ['checkbox', 'types', 'path'], // Добавьте 'path' в список плагинов
             types: {
                 file: {
                     icon: 'bi bi-file-earmark'
@@ -334,6 +359,13 @@
         // Load templates and first template after full tree initialization
         $('#file-tree').on('ready.jstree', function() {
             console.log('Tree is ready');
+            const treeInstance = $('#file-tree').jstree(true);
+            if (treeInstance && typeof treeInstance.get_node_by_path === 'function') {
+                console.log('get_node_by_path is available!!!');
+            } else {
+                console.error('get_node_by_path is not available!!!');
+            }
+
             loadTemplatesFromFile();
             loadFirstTemplate();
         });
@@ -352,23 +384,7 @@
         }
     }
 
-    $.jstree.plugins.path = function () {
-        this.get_node_by_path = function (fullPath) {
-            let node = null;
-            this.get_json('#', { flat: true }).some(n => {
-                if (n.original && n.original.path === fullPath) {
-                    node = n;
-                    return true;
-                }
-                return false;
-            });
-            return node;
-        };
-    };
-
     function loadTemplatesFromFile() {
-        const fs = require('fs');
-        const path = require('path');
         const filePath = path.join(projectPath, 'ai.context.json');
         if (fs.existsSync(filePath)) {
             templates = JSON.parse(fs.readFileSync(filePath, 'utf8'));
@@ -399,9 +415,6 @@
     }
 
     function openFile(filePath) {
-        const fs = require('fs');
-        const path = require('path');
-
         fs.readFile(filePath, 'utf8', (err, content) => {
             if (err) {
                 console.error('Error reading file:', err);
@@ -450,7 +463,6 @@
     });
 
     function updateTokenCount() {
-        const fs = require('fs');
         const selectedNodes = $('#file-tree').jstree('get_checked', true);
         let tokenCount = 0;
         let totalSize = 0;
@@ -516,8 +528,6 @@
             templates[templateIndex].name = newName;
             updateTemplateSelect();
             // Update file with templates
-            const fs = require('fs');
-            const path = require('path');
             const filePath = path.join(projectPath, 'ai.context.json');
             if (fs.existsSync(filePath)) {
                 let fileTemplates = JSON.parse(fs.readFileSync(filePath, 'utf8'));
@@ -553,8 +563,6 @@
     }
 
     function saveTemplateToFile(templateName, template) {
-        const fs = require('fs');
-        const path = require('path');
         const filePath = path.join(projectPath, 'ai.context.json');
         let templates = {};
         if (fs.existsSync(filePath)) {
@@ -565,8 +573,6 @@
     }
 
     function deleteTemplateFromFile(templateName) {
-        const fs = require('fs');
-        const path = require('path');
         const filePath = path.join(projectPath, 'ai.context.json');
         if (fs.existsSync(filePath)) {
             let templates = JSON.parse(fs.readFileSync(filePath, 'utf8'));
@@ -575,45 +581,111 @@
         }
     }
 
-    // Initialization
-    updateTemplateSelect();
-
-    function handleFileStructureChange() {
-        Object.keys(templates).forEach(templateName => {
-            templates[templateName] = templates[templateName].filter(relativePath => {
-                const fullPath = path.join(projectPath, relativePath);
-                return fs.existsSync(fullPath);
-            });
-        });
-        updateTemplateSelect();
-    }
-
     function watchProjectChanges() {
         if (!projectPath) return;
 
-        const chokidar = require('chokidar');
-        const watcher = chokidar.watch(projectPath, {
-            ignored: /(^|[\/\\])\../, // ignore dotfiles
-            persistent: true
+        const watcher = fs.watch(projectPath, { recursive: true }, (eventType, filename) => {
+            if (!filename) return; // Игнорируем события без имени файла
+
+            // Игнорируем изменения в .git и других системных папках
+            if (filename.includes('.git') || filename.includes('node_modules')) {
+                console.log(`Ignoring change in system directory: ${filename}`);
+                return;
+            }
+
+            console.log(`Change detected: ${eventType} in ${filename}`);
+            const fullPath = path.join(projectPath, filename);
+
+            // Добавляем задержку для обработки событий
+            setTimeout(() => {
+                fs.stat(fullPath, (err, stats) => {
+                    if (err) {
+                        // Если файл/папка не существует, это событие удаления
+                        console.log(`File deleted: ${filename}`);
+                        updateTreeItem(fullPath, 'delete');
+                    } else {
+                        // Если файл/папка существует, это событие добавления или изменения
+                        if (eventType === 'rename') {
+                            // Обрабатываем `rename` как `add`, если файл существует
+                            console.log(`File added or renamed: ${filename}`);
+                            updateTreeItem(fullPath, 'add');
+                        } else {
+                            console.log(`File changed: ${filename}`);
+                            updateTreeItem(fullPath, 'change');
+                        }
+                    }
+                });
+            }, 100); // Задержка 100 мс
         });
 
-        watcher
-            .on('add', path => {
-                updateFileTree();
-                handleFileStructureChange();
-            })
-            .on('unlink', path => {
-                updateFileTree();
-                handleFileStructureChange();
-            })
-            .on('addDir', path => {
-                updateFileTree();
-                handleFileStructureChange();
-            })
-            .on('unlinkDir', path => {
-                updateFileTree();
-                handleFileStructureChange();
-            });
+        watcher.on('error', (error) => {
+            console.error('Watcher error:', error);
+        });
+    }
+
+    function updateTreeItem(fullPath, eventType) {
+        const treeInstance = $('#file-tree').jstree(true);
+        if (!treeInstance) {
+            console.error('jstree is not initialized');
+            return;
+        }
+
+        console.log('updateTreeItem: ' + fullPath, 'event: ' + eventType);
+
+        // Ищем узел по полному пути
+        const node = treeInstance.get_node_by_path(fullPath);
+
+        if (node) {
+            console.log('Node already exists');
+            if (eventType === 'delete') {
+                // Удаляем узел, если он был удалён
+                console.log('Deleting node:', node);
+                treeInstance.delete_node(node);
+            } else if (eventType === 'rename') {
+                // Обновляем узел, если он был переименован
+                console.log('Refreshing node:', node);
+                treeInstance.refresh_node(node);
+            }
+        } else {
+            console.log('Node does not exist, adding new node');
+            // Если узел не найден, это новый файл или папка
+            const parentPath = path.dirname(fullPath);
+            const parentNode = treeInstance.get_node_by_path(parentPath);
+
+            if (parentNode) {
+                console.log('Parent node found:', parentNode);
+                // Создаём новый узел
+                const newNode = createTreeNode(fullPath);
+
+                // Добавляем новый узел в родительский узел
+                treeInstance.create_node(parentNode, newNode, 'last', function (newNode) {
+                    console.log('Node added:', newNode);
+                    treeInstance.open_node(parentNode); // Раскрываем родительский узел
+                });
+            } else if (parentPath === projectPath) {
+                // Если родительский путь совпадает с корневым путём проекта, используем корневой узел (#)
+                console.log('Parent node is root, adding to root');
+                const newNode = createTreeNode(fullPath);
+                treeInstance.create_node('#', newNode, 'last', function (newNode) {
+                    console.log('Node added to root:', newNode);
+                });
+            } else {
+                console.error('Parent directory node not found, cannot update subtree');
+            }
+        }
+    }
+
+    function createTreeNode(fullPath) {
+        const stats = fs.statSync(fullPath);
+        const isDirectory = stats.isDirectory();
+
+        return {
+            text: path.basename(fullPath),
+            path: fullPath,
+            type: isDirectory ? 'folder' : 'file',
+            icon: isDirectory ? 'bi bi-folder' : 'bi bi-file-earmark',
+            children: isDirectory ? getDirectoryStructure(fullPath) : undefined
+        };
     }
 
     function updateFileContent(filePath) {
@@ -696,7 +768,7 @@
                 context += `File Path: ${node.original.path}\nFile Content:\n${content}\n\n`;
             }
         });
-        require('nw.gui').Clipboard.get().set(context, 'text');
+        gui.Clipboard.get().set(context, 'text');
         alert('Context copied to clipboard');
     });
 
@@ -743,7 +815,6 @@
         chooser.addEventListener('change', (event) => {
             projectPath = chooser.value;
             updateFileTree();
-            loadTemplatesFromFile();
             watchProjectChanges();
         });
 
