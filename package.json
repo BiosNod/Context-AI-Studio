@@ -18,7 +18,7 @@
     ],
     "license": "MIT",
     "main": "index.html",
-    "name": "nwjs-ollama-ide",
+    "name": "context-ai-studio",
     "node-remote": [
         "<all_urls>"
     ],
@@ -38,15 +38,20 @@
     },
     "version": "1.0.0",
     "webexe_settings": {
+        "blacklist": "",
+        "custom_script": "",
         "download_dir": "D:/software/programs/pc/programming/nwjs",
+        "export_dir": "../",
         "force_download": false,
         "linux-x32": false,
         "linux-x64": false,
         "mac-x64": false,
         "nw_compression_level": 0,
         "nw_version": "0.87.0",
+        "output_pattern": "%(app_name)-%(version)-%(platform)",
         "sdk_build": false,
         "uncompressed_folder": true,
+        "whitelist": "",
         "windows-x32": false,
         "windows-x64": true
     },
@@ -56,6 +61,7 @@
     "window": {
         "frame": true,
         "height": 768,
+        "icon": "icon-context.png",
         "id": "Context AI Studio",
         "min_height": 600,
         "min_width": 800,
