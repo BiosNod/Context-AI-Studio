@@ -16,6 +16,7 @@ let pathToNodeMap = {};
 let treeElement = $('#file-tree');
 let treeInstance;
 let currentOpenedFile = '';
+let currentWatcher = null;
 
 
 function convertSpacesToTabs(content) {
@@ -447,7 +448,14 @@ function deleteTemplateFromFile(templateName) {
 function watchProjectChanges() {
 	if (!projectPath) return;
 
-	const watcher = fs.watch(projectPath, { recursive: true }, (eventType, filename) => {
+	// Закрываем предыдущий watcher, если он существует
+	if (currentWatcher) {
+		currentWatcher.close();
+		currentWatcher = null;
+	}
+
+	// Создаем новый watcher
+	currentWatcher = fs.watch(projectPath, { recursive: true }, (eventType, filename) => {
 		if (!filename) return; // Игнорируем события без имени файла
 
 		// Игнорируем изменения в .git и других системных папках
@@ -463,26 +471,21 @@ function watchProjectChanges() {
 
 		// Добавляем задержку для обработки событий
 		fs.stat(fullPath, (err, stats) => {
-			if (err)
-			{
+			if (err) {
 				// Если файл/папка не существует, это событие удаления
 				console.log(`File deleted: ${filename}`);
 				updateTreeItem(fullPath, 'delete');
-			}
-			else if (node)
-			{
+			} else if (node) {
 				console.log(`File changed: ${filename}`);
 				updateTreeItem(fullPath, 'change');
-			}
-			else
-			{
+			} else {
 				console.log(`File added: ${filename}`);
 				updateTreeItem(fullPath, 'add');
 			}
 		});
 	});
 
-	watcher.on('error', (error) => {
+	currentWatcher.on('error', (error) => {
 		console.error('Watcher error:', error);
 	});
 }
@@ -663,10 +666,23 @@ $('#select-project').on('click', () => {
 	chooser.nwdirectory = true;
 
 	chooser.addEventListener('change', (event) => {
+		// Закрываем текущий watcher, если он существует
+		if (currentWatcher) {
+			currentWatcher.close();
+			currentWatcher = null;
+		}
+
 		projectPath = chooser.value;
 		updateFileTree();
 		watchProjectChanges();
 	});
 
 	chooser.click();
+});
+
+gui.Window.get().on('close', function() {
+	if (currentWatcher) {
+		currentWatcher.close();
+	}
+	this.close(true);
 });
