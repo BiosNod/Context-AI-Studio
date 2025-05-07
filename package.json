@@ -1,7 +1,6 @@
 {
     "app_name": "Context AI Studio",
     "author": "biosnod",
-    "chromium-args": "--disable-web-security",
     "dependencies": {
         "ace-builds": "^1.9.6",
         "jquery": "^3.6.0",
@@ -58,6 +57,7 @@
     "webkit": {
         "plugin": true
     },
+    "chromium-args": "--disable-web-security --proxy-server=http://127.0.0.1",
     "window": {
         "frame": true,
         "height": 768,
