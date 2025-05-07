@@ -96,6 +96,12 @@ function getDirectoryStructure(dir) {
 
 		return files.map(file => {
 			const filePath = path.join(currentDir, file);
+
+			// Игнорируем папку node_modules
+			if (file === 'node_modules') {
+				return null;
+			}
+
 			let stats;
 			try {
 				stats = fs.statSync(filePath);
