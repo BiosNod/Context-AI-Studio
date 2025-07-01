@@ -18,6 +18,60 @@ let treeInstance;
 let currentOpenedFile = '';
 let currentWatcher = null;
 
+let ignorePatterns = [
+	'.git',
+	'.idea',
+	'node_modules',
+	'.vscode',
+	'.vs',
+	'dist',
+	'build',
+	'out',
+	'target',
+	'bin',
+	'obj',
+	'.gradle',
+	'.maven',
+	'__pycache__',
+	'.pytest_cache',
+	'.coverage',
+	'*.pyc',
+	'*.pyo',
+	'.env',
+	'.DS_Store',
+	'Thumbs.db',
+	'*.log',
+	'*.tmp',
+	'*.temp',
+	'.cache',
+	'.sass-cache',
+	'.next',
+	'.nuxt',
+	'coverage',
+	'logs'
+];
+
+let fileWatchTimeout = null;
+let watchedEvents = new Set(); // Для отслеживания уже обработанных событий
+
+// Функция для проверки, должен ли файл/папка быть проигнорирован
+function shouldIgnore(filename, filePath) {
+	for (let pattern of ignorePatterns) {
+		if (pattern.includes('*')) {
+			// Обработка wildcard паттернов
+			const regex = new RegExp(pattern.replace(/\*/g, '.*'));
+			if (regex.test(filename) || regex.test(filePath)) {
+				return true;
+			}
+		} else {
+			// Точное совпадение или содержание в пути
+			if (filename === pattern || filePath.includes(pattern)) {
+				return true;
+			}
+		}
+	}
+	return false;
+}
 
 function convertSpacesToTabs(content) {
 	return content.replace(/ {2}/g, '\t');
@@ -97,8 +151,8 @@ function getDirectoryStructure(dir) {
 		return files.map(file => {
 			const filePath = path.join(currentDir, file);
 
-			// Игнорируем папку node_modules
-			if (file === 'node_modules') {
+			// Проверяем, нужно ли игнорировать файл/папку
+			if (shouldIgnore(file, filePath)) {
 				return null;
 			}
 
@@ -464,31 +518,54 @@ function watchProjectChanges() {
 	currentWatcher = fs.watch(projectPath, { recursive: true }, (eventType, filename) => {
 		if (!filename) return; // Игнорируем события без имени файла
 
-		// Игнорируем изменения в .git и других системных папках
-		if (filename.includes('.git') || filename.includes('node_modules')) {
-			console.log(`Ignoring change in system directory: ${filename}`);
+		const fullPath = path.join(projectPath, filename);
+
+		// Игнорируем файлы по паттернам
+		if (shouldIgnore(filename, fullPath)) {
+			console.log(`Ignoring change in filtered directory/file: ${filename}`);
 			return;
 		}
 
-		const fullPath = path.join(projectPath, filename);
-		console.log(`Change detected: ${eventType} in ${filename}, fullPath: ${fullPath}`);
-		// Ищем узел по полному пути
-		const node = get_node_by_path(fullPath);
+		// Создаем уникальный ключ для события
+		const eventKey = `${eventType}-${fullPath}`;
 
-		// Добавляем задержку для обработки событий
-		fs.stat(fullPath, (err, stats) => {
-			if (err) {
-				// Если файл/папка не существует, это событие удаления
-				console.log(`File deleted: ${filename}`);
-				updateTreeItem(fullPath, 'delete');
-			} else if (node) {
-				console.log(`File changed: ${filename}`);
-				updateTreeItem(fullPath, 'change');
-			} else {
-				console.log(`File added: ${filename}`);
-				updateTreeItem(fullPath, 'add');
-			}
-		});
+		// Если событие уже обрабатывается, игнорируем
+		if (watchedEvents.has(eventKey)) {
+			return;
+		}
+
+		watchedEvents.add(eventKey);
+
+		// Удаляем ключ через короткое время
+		setTimeout(() => {
+			watchedEvents.delete(eventKey);
+		}, 100);
+
+		console.log(`Change detected: ${eventType} in ${filename}, fullPath: ${fullPath}`);
+
+		// Используем debounce для предотвращения множественных обновлений
+		if (fileWatchTimeout) {
+			clearTimeout(fileWatchTimeout);
+		}
+
+		fileWatchTimeout = setTimeout(() => {
+			fs.stat(fullPath, (err, stats) => {
+				if (err) {
+					// Если файл/папка не существует, это событие удаления
+					console.log(`File deleted: ${filename}`);
+					updateTreeItem(fullPath, 'delete');
+				} else {
+					const node = get_node_by_path(fullPath);
+					if (node) {
+						console.log(`File changed: ${filename}`);
+						updateTreeItem(fullPath, 'change');
+					} else {
+						console.log(`File added: ${filename}`);
+						updateTreeItem(fullPath, 'add');
+					}
+				}
+			});
+		}, 50); // Задержка 50мс для debounce
 	});
 
 	currentWatcher.on('error', (error) => {
@@ -508,13 +585,27 @@ function updateTreeItem(fullPath, eventType) {
 	const node = get_node_by_path(fullPath);
 
 	if (eventType === 'delete') {
-		console.log('Deleting node:', node);
-		treeInstance.delete_node(node);
-		delete pathToNodeMap[fullPath];
+		if (node) {
+			console.log('Deleting node:', node);
+			treeInstance.delete_node(node);
+			delete pathToNodeMap[fullPath];
+		}
 	} else if (eventType === 'change') {
-		console.log('Refreshing node:', node);
-		treeInstance.refresh_node(node);
+		if (node) {
+			console.log('Refreshing node:', node);
+			// Для изменений не обновляем дерево, так как это может вызвать проблемы
+			// Только обновляем содержимое файла в редакторе, если он открыт
+			if (currentOpenedFile === fullPath) {
+				updateFileContent(fullPath);
+			}
+		}
 	} else if (eventType === 'add') {
+		// Проверяем, что узел действительно не существует
+		if (node) {
+			console.log('Node already exists, skipping add');
+			return;
+		}
+
 		console.log('Node does not exist, adding new node');
 		// Если узел не найден, это новый файл или папка
 		const parentPath = path.dirname(fullPath);
@@ -522,25 +613,34 @@ function updateTreeItem(fullPath, eventType) {
 
 		if (parentNode) {
 			console.log('Parent node found:', parentNode);
-			// Создаём новый узел
-			const newNode = createTreeNode(fullPath);
 
-			// Добавляем новый узел в родительский узел
-			const nodeId = treeInstance.create_node(parentNode, newNode, 'last', function (newNode) {
-				console.log('Node added:', newNode);
-				treeInstance.open_node(parentNode); // Раскрываем родительский узел
-			});
+			try {
+				const newNodeData = createTreeNode(fullPath);
 
-			pathToNodeMap[fullPath] = nodeId;
+				const nodeId = treeInstance.create_node(parentNode, newNodeData, 'last', function (createdNode) {
+					console.log('Node added:', createdNode);
+					pathToNodeMap[fullPath] = createdNode.id;
+					treeInstance.open_node(parentNode);
+				});
+
+			} catch (error) {
+				console.error('Error creating node:', error);
+			}
 
 		} else if (parentPath === projectPath) {
-			// Если родительский путь совпадает с корневым путём проекта, используем корневой узел (#)
 			console.log('Parent node is root, adding to root');
-			const newNode = createTreeNode(fullPath);
-			const nodeId = treeInstance.create_node('#', newNode, 'last', function (newNode) {
-				console.log('Node added to root:', newNode);
-			});
-			pathToNodeMap[fullPath] = nodeId;
+
+			try {
+				const newNodeData = createTreeNode(fullPath);
+
+				const nodeId = treeInstance.create_node('#', newNodeData, 'last', function (createdNode) {
+					console.log('Node added to root:', createdNode);
+					pathToNodeMap[fullPath] = createdNode.id;
+				});
+
+			} catch (error) {
+				console.error('Error creating root node:', error);
+			}
 		} else {
 			console.error('Parent directory node not found, cannot update subtree');
 		}
@@ -550,16 +650,57 @@ function updateTreeItem(fullPath, eventType) {
 }
 
 function createTreeNode(fullPath) {
-	const stats = fs.statSync(fullPath);
-	const isDirectory = stats.isDirectory();
+	try {
+		const stats = fs.statSync(fullPath);
+		const isDirectory = stats.isDirectory();
 
-	return {
-		text: path.basename(fullPath),
-		path: fullPath,
-		type: isDirectory ? 'folder' : 'file',
-		icon: isDirectory ? 'bi bi-folder' : 'bi bi-file-earmark',
-		children: isDirectory ? getDirectoryStructure(fullPath) : undefined
-	};
+		return {
+			text: path.basename(fullPath),
+			path: fullPath,
+			type: isDirectory ? 'folder' : 'file',
+			icon: isDirectory ? 'bi bi-folder' : 'bi bi-file-earmark',
+			children: isDirectory ? [] : undefined // Для папок создаем пустой массив, дети будут загружены позже
+		};
+	} catch (error) {
+		console.error('Error creating tree node:', error);
+		return null;
+	}
+}
+
+function loadFilterPatterns() {
+	const filePath = path.join(projectPath, '.contextignore');
+	if (fs.existsSync(filePath)) {
+		const content = fs.readFileSync(filePath, 'utf8');
+		ignorePatterns = content.split('\n').filter(line => line.trim() !== '').map(line => line.trim());
+	}
+}
+
+function saveFilterPatterns() {
+	const filePath = path.join(projectPath, '.contextignore');
+	fs.writeFileSync(filePath, ignorePatterns.join('\n'), 'utf8');
+}
+
+function showFilterModal() {
+	$('#filter-patterns').val(ignorePatterns.join('\n'));
+	const modal = new bootstrap.Modal(document.getElementById('filter-modal'));
+	modal.show();
+}
+
+function applyFilters() {
+	const patterns = $('#filter-patterns').val().split('\n').filter(line => line.trim() !== '').map(line => line.trim());
+	ignorePatterns = patterns;
+
+	// Сохраняем паттерны в файл
+	if (projectPath) {
+		saveFilterPatterns();
+	}
+
+	// Обновляем дерево файлов
+	updateFileTree();
+
+	// Закрываем модальное окно
+	const modal = bootstrap.Modal.getInstance(document.getElementById('filter-modal'));
+	modal.hide();
 }
 
 function updateFileContent(filePath) {
@@ -679,12 +820,16 @@ $('#select-project').on('click', () => {
 		}
 
 		projectPath = chooser.value;
+		loadFilterPatterns(); // Загружаем паттерны фильтров из файла
 		updateFileTree();
 		watchProjectChanges();
 	});
 
 	chooser.click();
 });
+
+$('#filter-button').on('click', showFilterModal);
+$('#apply-filters').on('click', applyFilters);
 
 gui.Window.get().on('close', function() {
 	if (currentWatcher) {

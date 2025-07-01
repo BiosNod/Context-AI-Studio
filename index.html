@@ -105,11 +105,23 @@
         body.resizing #editor-panel {
             pointer-events: none;
         }
+        #filter-modal .modal-content {
+            background-color: #2a2a2a;
+            border-color: #444;
+        }
+        #filter-patterns {
+            background-color: #1a1a1a;
+            border-color: #444;
+            color: #ffffff;
+        }
     </style>
 </head>
 <body class="bg-dark text-light">
 <div id="left-panel">
     <button id="select-project" class="btn btn-primary w-100">Select Project Directory</button>
+    <button id="filter-button" class="btn btn-secondary w-100" title="Configure Filters">
+        <i class="bi bi-funnel"></i> Filters
+    </button>
     <div id="file-tree"></div>
     <div id="context-info" class="mt-2">
         <div>Tokens in context: <span id="token-count">0</span></div>
@@ -154,6 +166,27 @@
             <option value="1.5">150%</option>
             <option value="2">200%</option>
         </select>
+    </div>
+</div>
+
+<!-- Filter Modal -->
+<div class="modal fade" id="filter-modal" tabindex="-1">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title">Filter Settings</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body">
+                <label for="filter-patterns" class="form-label">Ignore patterns (one per line):</label>
+                <textarea id="filter-patterns" class="form-control" rows="10" placeholder="Enter patterns to ignore..."></textarea>
+                <small class="form-text text-muted">Examples: node_modules, *.log, .git, dist/</small>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
+                <button type="button" class="btn btn-primary" id="apply-filters">Apply Filters</button>
+            </div>
+        </div>
     </div>
 </div>
 
